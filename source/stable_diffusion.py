@@ -14,7 +14,7 @@
 from typing import Union,List,Optional
 
 from transformers import CLIPTextModel, CLIPTokenizer, logging
-from diffusers import AutoencoderKL, UNet2DConditionModel, PNDMScheduler, 
+from diffusers import AutoencoderKL, UNet2DConditionModel, PNDMScheduler
 from diffusers import StableDiffusionPipeline
 
 import torch
@@ -60,33 +60,27 @@ class StableDiffusion(nn.Module):
 
         print(f'[INFO] sd.py: loaded stable diffusion!')
 
-    def get_text_embeddings(self, prompts: Union[str, List[str]])->torch.Tensor:
-        
-        if isinstance(prompts,str):
-            prompts=[prompts]
+    def get_text_embedding(self, prompt: str)->torch.Tensor:
+        assert isinstance(prompt, str)
 
         # Tokenize text and get embeddings
-        text_input = self.tokenizer(prompts, padding='max_length', max_length=self.tokenizer.model_max_length, truncation=True, return_tensors='pt').input_ids
+        text_input = self.tokenizer(
+            [prompt],
+            padding='max_length', 
+            max_length=self.tokenizer.model_max_length,
+            truncation=True, 
+            return_tensors='pt'
+        ).input_ids.to(self.device)
 
         with torch.no_grad():
-            text_embeddings = self.text_encoder(text_input.to(self.device))[0]
+            text_embeddings = self.text_encoder(text_input).last_hidden_state
 
-        # Do the same for unconditional embeddings
-        uncond_input = self.tokenizer([self.uncond_text] * len(prompts), padding='max_length', max_length=self.tokenizer.model_max_length, return_tensors='pt').input_ids
+        assert len(text_embeddings)==1
+        text_embedding = text_embeddings[0]
 
-        with torch.no_grad():
-            uncond_embeddings = self.text_encoder(uncond_input.to(self.device))[0]
+        assert text_embedding.shape == (77, 768)
 
-        assert len(uncond_embeddings)==len(text_embeddings)==len(prompts)==len(text_input)==len(uncond_input)
-
-        output_embeddings = torch.cat([uncond_embeddings, text_embeddings])
-
-        assert (uncond_embeddings==torch.stack([uncond_embeddings[0]]*len(uncond_embeddings))).all()
-        assert (uncond_embeddings==uncond_embeddings[0][None]).all()
-
-        assert output_embeddings.shape == (len(prompts)*2, 77, 768)
-
-        return output_embeddings
+        return text_embedding
 
     def add_noise(self, original_samples, noise, timesteps):
         #This is identical to scheduler.add_noise, assuming the scheduler is DDIM, DDPM or PNDM
