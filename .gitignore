@@ -1,0 +1,6 @@
+.ipynb_checkpoints
+.virtual_documents
+sd_previewer_results
+sd_previewer_results2
+*.un~
+*__pycache__
