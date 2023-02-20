@@ -43,7 +43,12 @@ class StableDiffusion(nn.Module):
         pipe = StableDiffusionPipeline.from_pretrained(checkpoint_path, torch_dtype=torch.float)
         pipe.safety_checker = lambda images, _: images, False # Disable the NSFW checker (slows things down)
     
-        pipe.scheduler = PNDMScheduler(beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear", num_train_timesteps=self.num_train_timesteps) #Error from scheduling_lms_discrete.py
+        pipe.scheduler = PNDMScheduler(
+            beta_start=0.00085,
+            beta_end=0.012,
+            beta_schedule="scaled_linear",
+            num_train_timesteps=self.num_train_timesteps,
+        )  # Error from scheduling_lms_discrete.py
         
         self.pipe         = pipe
         self.vae          = pipe.vae         .to(self.device) ; assert isinstance(self.vae          , AutoencoderKL       ),type(self.vae          )
@@ -60,27 +65,42 @@ class StableDiffusion(nn.Module):
 
         print(f'[INFO] sd.py: loaded stable diffusion!')
 
-    def get_text_embedding(self, prompt: str)->torch.Tensor:
-        assert isinstance(prompt, str)
+    def get_text_embeddings(self, texts: List[str]) -> torch.Tensor:
+        assert isinstance(texts, list)
+        assert all(isinstance(text, str) for text in texts)
 
-        # Tokenize text and get embeddings
+        # Tokenize text
         text_input = self.tokenizer(
-            [prompt],
-            padding='max_length', 
+            texts,
+            padding="max_length",
             max_length=self.tokenizer.model_max_length,
-            truncation=True, 
-            return_tensors='pt'
+            truncation=True,
+            return_tensors="pt",
         ).input_ids.to(self.device)
 
+        # Calculate embeddings
         with torch.no_grad():
             text_embeddings = self.text_encoder(text_input).last_hidden_state
 
-        assert len(text_embeddings)==1
+        # Output assertions
+        assert text_embeddings.shape == (len(texts), 77, 768)
+        assert text_embeddings.device == self.device
+
+        return text_embeddings
+
+    def get_text_embedding(self, text: str) -> torch.Tensor:
+        assert isinstance(text, str)
+
+        text_embeddings = self.get_text_embeddings([text])
+        assert text_embeddings.shape == (1, 77, 768)
+
         text_embedding = text_embeddings[0]
 
+        # Output assertions
         assert text_embedding.shape == (77, 768)
+        assert text_embedding.device == self.device
 
-        return text_embedding
+        assert text_embedding
 
     def add_noise(self, original_samples, noise, timesteps):
         #This is identical to scheduler.add_noise, assuming the scheduler is DDIM, DDPM or PNDM
@@ -187,7 +207,14 @@ class StableDiffusion(nn.Module):
 
         return output
 
-    def produce_latents(self, text_embeddings:torch.Tensor, height:int=512, width:int=512, num_inference_steps=50, guidance_scale=7.5, latents=None)->torch.Tensor:
+    def produce_latents(self,
+                        text_embeddings:torch.Tensor, 
+                        height:int=512,
+                        width:int=512,
+                        num_inference_steps=50,
+                        guidance_scale=7.5,
+                        latents=None
+                       )->torch.Tensor:
         assert len(text_embeddings.shape)==3 and text_embeddings.shape[-2:]==(77,768)
         assert not len(text_embeddings)%2
         num_prompts = len(text_embeddings)//2
@@ -273,6 +300,10 @@ class StableDiffusion(nn.Module):
         assert len(latent.shape) == 3 and latent.shape[0] == 4  # [4, H, W]
 
         return latent
+    
+    
+    
+    #TODO:
     
     def embeddings_to_imgs(self, text_embeddings:torch.Tensor, 
                      height:int=512, 
