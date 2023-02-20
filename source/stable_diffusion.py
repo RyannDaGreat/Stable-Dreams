@@ -37,7 +37,7 @@ class StableDiffusion(nn.Module):
         self.min_step = int(self.num_train_timesteps * 0.02) # aka 20
         self.max_step = int(self.num_train_timesteps * 0.98) # aka 980
 
-        print('[INFO] sd.py: loading stable diffusion...please make sure you have run `huggingface-cli login`.')
+        print('[INFO] stable_diffusion.py: loading stable diffusion...please make sure you have run `huggingface-cli login`.')
         
         # Unlike the original code, I'll load these from the pipeline. This lets us use dreambooth models.
         pipe = StableDiffusionPipeline.from_pretrained(checkpoint_path, torch_dtype=torch.float)
@@ -63,7 +63,7 @@ class StableDiffusion(nn.Module):
             
         self.alphas = self.scheduler.alphas_cumprod.to(self.device) # for convenience
 
-        print(f'[INFO] sd.py: loaded stable diffusion!')
+        print(f'[INFO] stable_diffusion.py: loaded stable diffusion!')
 
     def get_text_embeddings(self, texts: List[str]) -> torch.Tensor:
         assert isinstance(texts, list)
@@ -209,20 +209,20 @@ class StableDiffusion(nn.Module):
 
     def produce_latents(self,
                         text_embeddings:torch.Tensor, 
-                        height:int=512,
-                        width:int=512,
-                        num_inference_steps=50,
-                        guidance_scale=7.5,
-                        latents=None
+                        latent_height:int=64,
+                        latent_width:int=64,
+                        num_inference_steps:int=50,
+                        guidance_scale:float=7.5,
                        )->torch.Tensor:
-        assert len(text_embeddings.shape)==3 and text_embeddings.shape[-2:]==(77,768)
-        assert not len(text_embeddings)%2
-        num_prompts = len(text_embeddings)//2
 
-        if latents is None:
-            latents = torch.randn((num_prompts, self.unet.in_channels, height // 8, width // 8), device=self.device)
-
+        assert text_embeddings.shape == (2, 77, 768), 'Please provide exactly two text embeddings'
         assert 0 <= num_inference_steps <= 1000, 'Stable diffusion appears to be trained with 1000 timesteps'
+
+        text_embedding, negative_text_embedding = text_embeddings
+        num_channels == self.unet.in_channels
+
+        latents = torch.randn(2, num_channels, latent_height, latent_width)
+        latents = latents.to(self.device)
 
         self.scheduler.set_timesteps(num_inference_steps)
 
@@ -241,10 +241,10 @@ class StableDiffusion(nn.Module):
                     assert len(latent_model_input)==len(text_embeddings)==len(noise_pred)
 
                 # perform guidance
-                assert noise_pred.shape == (2*num_prompts, 4, 64, 64)
+                assert noise_pred.shape == (2, num_channels, latent_height, latent_width)
                 noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
                 noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
-                assert noise_pred.shape == (1*num_prompts, 4, 64, 64)
+                assert noise_pred.shape == (1, num_channels, latent_height, latent_width)
 
                 # compute the previous noisy sample x_t -> x_t-1
                 latents = self.scheduler.step(noise_pred, t, latents)['prev_sample'] #It's a dict with nothing but 'prev_sample' in it
