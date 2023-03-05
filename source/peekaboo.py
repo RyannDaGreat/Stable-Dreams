@@ -439,7 +439,7 @@ def run_peekaboo(name:str, image:Union[str,np.ndarray], label:Optional['BaseLabe
         git_hash=rp.get_current_git_hash(), 
         time_started=rp.r._format_datetime(time_started),
         time_completed=rp.r._format_datetime(rp.get_current_date()),
-        device=device,
+        device=s.device,
         computer_name=rp.get_computer_name(),
     ) 
 
