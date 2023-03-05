@@ -26,6 +26,8 @@ import rp
 # Suppress partial model loading warning
 logging.set_verbosity_error()
 
+_stable_diffusion_singleton = None #This singleton gets set the first time a StableDiffusion is constructed. Usually you'll only ever make one.
+
 class StableDiffusion(nn.Module):
     def __init__(self, device='cuda', checkpoint_path="CompVis/stable-diffusion-v1-4"):
         super().__init__()
@@ -59,6 +61,10 @@ class StableDiffusion(nn.Module):
         self.alphas = self.scheduler.alphas_cumprod.to(self.device) # for convenience
 
         print(f'[INFO] sd.py: loaded stable diffusion!')
+        
+        #Set the singleton. Other classes such as Label need this.
+        global _stable_diffusion_singleton
+        _stable_diffusion_singleton=self
 
     def get_text_embeddings(self, prompts: Union[str, List[str]])->torch.Tensor:
         
