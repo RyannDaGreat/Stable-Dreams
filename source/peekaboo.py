@@ -19,6 +19,8 @@ from source.learnable_textures import (LearnableImageFourier,
                                        LearnableTexturePackRaster,
                                       LearnableImageRasterSigmoided)
 
+from source.stable_diffusion_labels import get_mean_embedding, BaseLabel, SimpleLabel, MeanLabel
+
 def make_learnable_image(height, width, num_channels, foreground=None, bilateral_kwargs:dict={}, representation = 'fourier'):
     #Here we determine our image parametrization schema
     bilateral_blur =  BilateralProxyBlur(foreground,**bilateral_kwargs)
@@ -53,6 +55,8 @@ class PeekabooSegmenter(nn.Module):
                  max_step=None,
                 ):
         
+        s=sd._get_stable_diffusion_singleton()
+        
         super().__init__()
         
         height=width=size #We use square images for now
@@ -75,7 +79,7 @@ class PeekabooSegmenter(nn.Module):
         assert image.shape==(height,width,3) and image.min()>=0 and image.max()<=1
         self.image=image
         
-        self.foreground=rp.as_torch_image(image).to(device) #Convert the image to a torch tensor in CHW form
+        self.foreground=rp.as_torch_image(image).to(s.device) #Convert the image to a torch tensor in CHW form
         assert self.foreground.shape==(3, height, width)
         
         self.background=self.foreground*0 #The background will be a solid color for now
@@ -96,7 +100,9 @@ class PeekabooSegmenter(nn.Module):
     def randomize_background(self):
         self.set_background_color(rp.random_rgb_float_color())
         
-    def forward(self, alphas=None, return_alphas=False):
+    def forward(self, alphas=None, return_alphas=False):        
+        s=sd._get_stable_diffusion_singleton()
+        
         try:
             old_min_step=s.min_step
             old_max_step=s.max_step
@@ -209,39 +215,6 @@ def display(self):
     return output_image
 
 PeekabooSegmenter.display=display
-
-def get_mean_embedding(prompts:list):
-    return torch.mean(
-        torch.stack(
-            [s.get_text_embeddings(prompt) for prompt in prompts]
-        ),
-        dim=0
-    ).to(device)
-
-class BaseLabel:
-    def __init__(self, name:str, embedding:torch.Tensor):
-        #Later on we might have more sophisticated embeddings, such as averaging multiple prompts
-        #We also might have associated colors for visualization, or relations between labels
-        self.name=name
-        self.embedding=embedding
-        
-    def get_sample_image(self):
-        output=s.embeddings_to_imgs(self.embedding)[0]
-        assert rp.is_image(output)
-        return output
-
-    def __repr__(self):
-        return '%s(name=%s)'%(type(self).__name__,self.name)
-        
-class SimpleLabel(BaseLabel):
-    def __init__(self, name:str):
-        super().__init__(name, s.get_text_embeddings(name).to(device))
-
-class MeanLabel(BaseLabel):
-    #Test: rp.display_image(rp.horizontally_concatenated_images(MeanLabel('Dogcat','dog','cat').get_sample_image() for _ in range(1)))
-    def __init__(self, name:str, *prompts):
-        prompts=rp.detuple(prompts)
-        super().__init__(name, get_mean_embedding(prompts))
     
 def log_cell(cell_title):
     rp.fansi_print("<Cell: %s>"%cell_title, 'cyan', 'underlined')
@@ -324,6 +297,8 @@ def run_peekaboo(name:str, image:Union[str,np.ndarray], label:Optional['BaseLabe
                 use_stable_dream_loss=True,
                 )->PeekabooResults:
     
+    s=sd._get_stable_diffusion_singleton()
+    
     if label is None: 
         label=SimpleLabel(name)
     
@@ -353,7 +328,7 @@ def run_peekaboo(name:str, image:Union[str,np.ndarray], label:Optional['BaseLabe
                         representation=representation, 
                         min_step=min_step,
                         max_step=max_step,
-                       ).to(device)
+                       ).to(s.device)
 
     if 'bilateral' in representation:
         blur_image=rp.as_numpy_image(p.alphas.bilateral_blur(p.foreground))
@@ -476,7 +451,3 @@ def run_peekaboo(name:str, image:Union[str,np.ndarray], label:Optional['BaseLabe
     icecream.ic(name,label,image_path, GRAVITY, BATCH_SIZE, NUM_ITER, GUIDANCE_SCALE,  bilateral_kwargs)
     
     return results
-    
-#Importing this module loads a stable diffusion model. Hope you have a GPU!
-s=sd.StableDiffusion('cuda:0','CompVis/stable-diffusion-v1-4')
-device=s.device

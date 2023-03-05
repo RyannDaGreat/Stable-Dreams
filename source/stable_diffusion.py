@@ -28,8 +28,21 @@ logging.set_verbosity_error()
 
 _stable_diffusion_singleton = None #This singleton gets set the first time a StableDiffusion is constructed. Usually you'll only ever make one.
 
+def _get_stable_diffusion_singleton():
+    if _stable_diffusion_singleton is None:
+        assert False, 'Please create a stable_diffusion.StableDiffusion instance before creating a label'
+    return _stable_diffusion_singleton
+
+
 class StableDiffusion(nn.Module):
     def __init__(self, device='cuda', checkpoint_path="CompVis/stable-diffusion-v1-4"):
+        
+        global _stable_diffusion_singleton
+        if _stable_diffusion_singleton is not None:
+            rp.fansi_print('WARNING! StableDiffusion was instantiated twice!','yellow','bold')
+        #Set the singleton. Other classes such as Label need this.
+        _stable_diffusion_singleton=self
+            
         super().__init__()
 
         self.device = torch.device(device)
@@ -61,10 +74,6 @@ class StableDiffusion(nn.Module):
         self.alphas = self.scheduler.alphas_cumprod.to(self.device) # for convenience
 
         print(f'[INFO] sd.py: loaded stable diffusion!')
-        
-        #Set the singleton. Other classes such as Label need this.
-        global _stable_diffusion_singleton
-        _stable_diffusion_singleton=self
 
     def get_text_embeddings(self, prompts: Union[str, List[str]])->torch.Tensor:
         
