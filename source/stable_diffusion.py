@@ -14,7 +14,7 @@
 from typing import Union,List,Optional
 
 from transformers import CLIPTextModel, CLIPTokenizer, logging
-from diffusers import AutoencoderKL, UNet2DConditionModel, PNDMScheduler, 
+from diffusers import AutoencoderKL, UNet2DConditionModel, PNDMScheduler
 from diffusers import StableDiffusionPipeline
 
 import torch
