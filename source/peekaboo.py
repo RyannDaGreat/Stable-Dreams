@@ -19,6 +19,12 @@ from source.learnable_textures import (LearnableImageFourier,
                                        LearnableTexturePackRaster,
                                       LearnableImageRasterSigmoided)
 
+import rp
+from easydict import EasyDict
+from collections import defaultdict
+import pandas as pd
+from icecream import ic
+
 from source.stable_diffusion_labels import get_mean_embedding, BaseLabel, SimpleLabel, MeanLabel
 
 def make_learnable_image(height, width, num_channels, foreground=None, bilateral_kwargs:dict={}, representation = 'fourier'):
@@ -259,6 +265,65 @@ def save_peekaboo_results(results,new_folder_path):
         rp.save_json(params,'params.json',pretty=True)
         log("Done saving PeekabooResults to "+new_folder_path+"!")
         
+        
+class PeekabooResult:
+    def __init__(self,root):
+        self.root=root
+
+    def sub(self,path):
+        return rp.path_join(self.root,path)
+
+    def img(self,path):
+        return rp.as_float_image(rp.load_image(self.sub(path),use_cache=True))
+
+    @property
+    def is_valid(self):
+        try:
+            #Are all the associated paths there?
+            self.params
+            return True
+        except Exception:
+            return False
+    
+    @rp.memoized_property
+    def image_path(self):
+        return self.params.image_path
+
+    @rp.memoized_property
+    def image_name(self):
+        return rp.get_file_name(self.image_path)
+
+    @rp.memoized_property
+    def name(self):
+        return self.params.p_name
+
+    @rp.memoized_property
+    def params(self):
+        return EasyDict(rp.load_json(self.sub('params.json')))
+
+    @rp.memoized_property
+    def image(self):
+        return rp.as_rgb_image(rp.as_float_image(self.img('image.png')))
+    
+    @rp.memoized_property
+    def scaled_image(self):
+        return rp.cv_resize_image(self.image,rp.get_image_file_dimensions(self.alpha_path))
+
+    @rp.memoized_property
+    def alpha(self):
+        return rp.as_grayscale_image(rp.as_float_image(self.img('alphas/0.png')))
+    
+    @rp.memoized_property
+    def alpha_path(self):
+        return self.sub('alphas/0.png')
+
+    @rp.memoized_property
+    def preview_image(self):
+        return self.img('preview_image.png')
+
+    def __repr__(self):
+        return 'PeekabooResult(%s)'%(self.name)
+        
 def make_image_square(image:np.ndarray, method='crop')->np.ndarray:
     #Takes any image and makes it into a 512x512 square image with shape (512,512,3)
     assert rp.is_image(image)
@@ -295,6 +360,7 @@ def run_peekaboo(name:str, image:Union[str,np.ndarray], label:Optional['BaseLabe
                 max_step=None,
                 clip_coef=0,
                 use_stable_dream_loss=True,
+                 output_folder_name='peekaboo_results',
                 )->PeekabooResults:
     
     s=sd._get_stable_diffusion_singleton()
@@ -399,7 +465,7 @@ def run_peekaboo(name:str, image:Union[str,np.ndarray], label:Optional['BaseLabe
         log("Interrupted early, returning current results...")
         pass
 
-    output_folder = rp.make_folder('peekaboo_results/%s'%name)
+    output_folder = rp.make_folder('%s/%s'%(output_folder_name,name))
     output_folder += '/%03i'%len(rp.get_subfolders(output_folder))
     
                 
