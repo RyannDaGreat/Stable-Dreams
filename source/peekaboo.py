@@ -1,4 +1,3 @@
-from typing import Union, List, Optional
 
 import icecream
 import numpy as np
@@ -19,6 +18,7 @@ from source.learnable_textures import (LearnableImageFourier,
                                        LearnableTexturePackRaster,
                                       LearnableImageRasterSigmoided)
 
+from typing import Union, List, Optional
 import rp
 from easydict import EasyDict
 from collections import defaultdict
