@@ -4,6 +4,7 @@ sd_previewer_results
 sd_previewer_results2
 *.un~
 *__pycache__
+*.swp
 untracked
 videos
 
