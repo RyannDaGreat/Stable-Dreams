@@ -8,9 +8,13 @@ sd_previewer_results2
 untracked
 videos
 
-thumbnails_data6
+thumbnails_data*
 peekaboo_results
 peekaboo_results_coco
 peekaboo_results_coco_fixed
 peekaboo_results_ref_voc_mo
 filebrowser.db
+
+peekaboo_misc_results
+peekaboo_results_coco_fixed_2
+peekaboo_results_coco_nocrop
